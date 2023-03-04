@@ -1,0 +1,84 @@
+// Solidity version 0.8.0
+
+Pragma solidity ^0.8.0;
+
+// Import necessary libraries
+
+Import https://github.com/OpenZeppelin/openzeppelin-contracts/blob/release-v4.3/contracts/utils/Context.sol;
+
+Import https://github.com/OpenZeppelin/openzeppelin-contracts/blob/release-v4.3/contracts/utils/structs/EnumerableSet.sol;
+
+Import https://github.com/OpenZeppelin/openzeppelin-contracts/blob/release-v4.3/contracts/token/ERC20/IERC20.sol;
+
+Import https://github.com/OpenZeppelin/openzeppelin-contracts/blob/release-v4.3/contracts/token/ERC20/utils/SafeERC20.sol;
+
+// Define contract
+
+Contract Activity is Context {
+
+Using EnumerableSet for EnumerableSet.UintSet;
+
+Using SafeERC20 for IERC20;
+
+// Define storage variables
+mapping(address => (address, bytes[], uint32[], uint32[])) private clientInfo;
+mapping(bytes => uint32) private activityVendors;
+EnumerableSet.UintSet private availableItems;
+
+// Define events
+event ClientAdded(address indexed client);
+event ActivityAdded(address indexed client, bytes activity);
+event AvailableItemsFetched(bytes location, bytes date, bytes time);
+
+// Define functions
+function addClient(address name) public returns (bool) {
+    require(clientInfo[name].client == address(0), "Client already exists");
+    clientInfo[name] = (msg.sender, new bytes[](0), new uint32[](0), new uint32[](0));
+    emit ClientAdded(name);
+    return true;
+}
+
+function addActivity(address name, bytes memory activity) public returns (bool) {
+    (address client, bytes[] memory activities, uint32[] memory charges, uint32[] memory payments) = clientInfo[name];
+    require(client == msg.sender, "Unauthorized");
+    require(clientInfo[name].client != address(0), "Client does not exist");
+    activities.push(activity);
+    clientInfo[name] = (client, activities, charges, payments);
+    emit ActivityAdded(name, activity);
+    return true;
+}
+
+function fetchAvailableItems(bytes memory location, bytes memory date, bytes memory time) public returns (bool) {
+    string memory fareharborApiKey = "your_api_key_here";
+    string memory fareharborUrl = string(abi.encodePacked("https://fareharbor.com/api/external/v1/", location, "/items/"));
+
+    // Make API call to FareHarbor
+    Client client = Client({
+        header: {"Content-Type": "application/json", "User-Agent": "Solidity Fareharbor Integration", "Authorization": string(abi.encodePacked("Bearer ", fareharborApiKey))}
+    });
+    Response response = client.get(fareharborUrl);
+
+    if (response.statusCode() == 200) {
+        JSONValue json = JSON.parse(response.body());
+        JSONArray items = json.asObject().get("items").asArray();
+
+        if (items.length() > 0) {
+            for (uint i = 0; i < items.length(); i++) {
+                uint32 itemId = items[i].asObject().get("id").asUInt32();
+                activityVendors[abi.encodePacked(location, itemId)] = i + 1;
+                availableItems.add(itemId);
+            }
+
+            emit AvailableItemsFetched(location, date, time);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Define ActivityBooking contract variables
+address payable public owner;
+mapping(address => uint256) public balances;
+mapping(uint256 => bool) public bookedSlots;
+uint256 public
